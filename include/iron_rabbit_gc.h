@@ -1,20 +1,21 @@
 #ifndef __IRON_RABBIT_GC_H__
 #define __IRON_RABBIT_GC_H__
 
+#include "unistd.h"
+#include "stddef.h"
+
 // flag for GC information being printed to terminal
 #ifndef VERBOSE
 #define VERBOSE 1
 #endif
 
-// specifies the smallest alloc size allowed (page size)
-#define MIN_ALLOC_SIZE 4096
-
-/**
- * Struct for the header of our heaps memory blocks
- * */
-typedef struct header {
-	unsigned int m_size;
+typedef struct header
+{
+	size_t m_size;
 	struct header *m_next;
 } header_st;
+
+void IR_info();
+void *IR_malloc(size_t bytes_size);
 
 #endif

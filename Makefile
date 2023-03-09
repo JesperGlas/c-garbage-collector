@@ -1,6 +1,6 @@
 PROJECT_NAME := iron_rabbit_gc
 CC := gcc
-CFLAGS := -Wall
+CFLAGS := -Wall -Wextra -std=c11 -pedantic
 BIN := bin
 LIB := lib
 SRC := src

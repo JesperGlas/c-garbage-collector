@@ -1,112 +1,62 @@
 #include "../include/iron_rabbit_gc.h"
-#include "unistd.h"
+#include "stdlib.h"
+#include "stddef.h"
+#include "stdbool.h"
+#include "assert.h"
+#include <unistd.h>
 
 #if VERBOSE==1
 #include "stdio.h"
 #endif
 
-static header_st gptr_base;
-static header_st *gptr_free = &gptr_base;
-static header_st *gptr_used;
+bool g_heap_init = false;
+size_t g_pagesize;
+header_st *g_heap;
+header_st *g_free;
+header_st *g_used;
 
-static void add_free_memory_block(header_st *ptr_blk)
+void IR_init()
 {
-	// verbose info
-	#if VERBOSE==1
+	// set global variable for page size
+	g_pagesize = sysconf(_SC_PAGESIZE);
 
-	printf("# Adding free memory block..\n");
-	printf("\tStart at: %p\n", ptr_blk);
-	printf("\tSize: %iu\n", ptr_blk->m_size);
-	printf("\tFree at: %p\n", gptr_free);
-	printf("\tSize: %iu\n", gptr_free->m_size);
+	// initialize heap
+	g_heap = malloc(g_pagesize);
+	g_heap->m_size = g_pagesize - sizeof(header_st);
+	g_heap->m_next = (void *) NULL;
 
-	#endif
+	// initialize free ptr
+	g_free = g_heap + sizeof(header_st);
+	g_free->m_size = g_pagesize - 2 * sizeof(header_st);
+	g_free->m_next = (void *) NULL;
 
-	header_st *ptr;
+	// initalize used ptr
+	g_used = (void *) NULL;
 
-	/*
-	* TODO: Explain
-	* */
-	for (ptr = gptr_free; (ptr_blk <= ptr || ptr->m_next <= ptr_blk); ptr = ptr->m_next)
-	{
-		/*
-		* If pointer address is greater or equal to pointer next address
-		* 	(i.e. ptr lies before next in memory) and,
-		* 	block pointer is greater than pointer or,
-		* 	block pointer is less than next pointer,
-		* 		then break the loop
-		* 	
-		* */
-		if (ptr >= ptr->m_next && (ptr_blk > ptr || ptr_blk < ptr->m_next))
-			break;
-	} // end loop
-	
-	// if block reaches next pointer,
-	if (ptr_blk + ptr_blk->m_size == ptr->m_next)
-	{
-		// reserve additional for block
-		ptr_blk->m_size += ptr->m_next->m_size;
-		ptr_blk->m_next = ptr->m_next->m_next;
-	}
-	else // else, 
-	{
-		// set block next as pointer next
-		ptr_blk->m_next = ptr->m_next;
-	}
-
-	// if pointer reaches block,
-	if (ptr + ptr->m_size == ptr_blk)
-	{
-		// move pointer to after block
-		ptr->m_size += ptr_blk->m_size;
-		ptr->m_next = ptr_blk->m_next;
-	}
-
-	// set new global free pointer to pointer
-	gptr_free = ptr;
-	return;
+	// set heap as active
+	g_heap_init = true;
 }
 
-static header_st *request_kernal_memory(unsigned int units)
+void IR_info()
 {
-	// verbose info
-	#if VERBOSE == 1
-	printf("Requesting %iu units of memory from kernal..\n", units);
-	#endif
-
-	void *ptr_void;
-	header_st *ptr_blk;
-
-	if (units > MIN_ALLOC_SIZE)
+	printf("### HEAP INFO ###\n");
+	
+	// check if heap is initalized
+	if (g_heap_init == false)
 	{
-		units = MIN_ALLOC_SIZE / sizeof(header_st);
+		printf("\tHeap is not initialized!\n");
+		return;
 	}
 
-	// if sbrk fails (returns -1 void ptr),
-	if ((ptr_void = sbrk(units * sizeof(header_st))) == (void *) -1)
-	{
-		// verbose info
-		#if VERBOSE==1
-		printf("\tRequest failed at sbrk()\n");
-		#endif
+	// heap info
+	printf("\tCurrent size: %lu\n", g_heap->m_size);
+	printf("\t%p [0] Heap start\n", g_heap);
+	printf("\t%p [%lu] Free\n", g_free, g_free - g_heap);
+}
 
-		// return 0 (NULL)
-		return 0;
-	}
+void *IR_malloc(size_t bytes_size)
+{
+	IR_init();
 
-	// cast void pointer returned from sbrk to header_st pointer
-	ptr_blk = (header_st *) ptr_void;
-	// set size of block
-	ptr_blk->m_size = units;
-	// add block to free memory pool (updates gptr_free)
-	add_free_memory_block(ptr_blk);
-
-	// verbose info
-	#if VERBOSE==1
-	printf("\tSuccess!\n");
-	printf("\tStart at: %p\n", ptr_blk);
-	printf("\tSize: %iu\n", ptr_blk->m_size);
-	#endif
-
-	return gptr_free;
+	return (void *) NULL;
 }
