@@ -1,97 +1,107 @@
 #include "../include/iron_rabbit_gc.h"
-#include "stdlib.h"
-#include "stddef.h"
-#include "stdbool.h"
-#include "assert.h"
-#include <unistd.h>
+#include "stddef.h"	// used for type size_t, ptrdiff_t (unsigned long %lu)
+#include "stdbool.h"	// used for type bool (int)
+#include "unistd.h"	// contains sbrk method
+#include "stdio.h"	// used for printf method
+#include "string.h"	// used for memcpy method
 
-#if VERBOSE==1
-#include "stdio.h"
-#endif
-
-bool g_heap_init = false;
+// global variables
+bool g_active = false;
 size_t g_pagesize;
-header_st *g_heap;
+void *g_start;
+void *g_end;
+size_t g_capacity;
+header_st *g_used;
 header_st *g_free;
 
 void IR_init()
 {
-	// set global variable for page size
+	// init heap
 	g_pagesize = sysconf(_SC_PAGESIZE);
+	g_start = (void *) sbrk(g_pagesize);
+	g_end = (void *) sbrk(0);
 
-	// initialize heap
-	g_heap = malloc(g_pagesize);
-	g_heap->m_size = g_pagesize - sizeof(header_st);
-	g_heap->m_next = g_heap + sizeof(header_st);
+	// init ptr to used memory
+	g_used = g_start;
+	g_used->m_size = 0;
+	g_used->m_next = g_used + sizeof(header_st);
 
-	// initialize free ptr
-	g_free = g_heap->m_next;
-	g_free->m_size = g_heap->m_size;
+	// init ptr to free memory
+	g_free = g_used->m_next;
+	g_free->m_size = g_pagesize - 2*sizeof(header_st);
 	g_free->m_next = (void *) NULL;
 
 	// set heap as active
-	g_heap_init = true;
+	g_active = true;
 }
 
 void IR_info()
 {
-	printf("### HEAP INFO ###\n");
-	
-	// check if heap is initalized
-	if (g_heap_init == false)
+	// make sure heap is initiated
+	if (g_active == false)
 	{
-		printf("\tHeap is not initialized!\n");
+		printf("### HEAP INFO ###\n");
+		printf("\tHeap is not initiated..\n");
+		printf("### END ###\n");
 		return;
 	}
 
-	// heap info
-	printf("\tCurrent size: %lu\n", g_heap->m_size);
-	printf("\t%p [0] Heap start\n", (void *) g_heap);
-
-	// print all free blocks
+	// general heap info
+	printf("### HEAP INFO ###\n");
+	printf("\t%p [0]\tHeap start\n",
+		(void *) g_start );
+	printf("\t%p [%li]\tHeap end\n",
+		(void *) g_end,
+		g_end - g_start );
+	
+	// used memory info
 	size_t i = 0;
+	for (header_st *ptr = g_used; ptr != g_free; ptr = ptr->m_next, i++)
+	{
+		printf("\t%p [%li]\tUsed block %li (Size: %lu)\n",
+			(void *) ptr,
+			(ptrdiff_t) ((char *) ptr - (char *) g_start),
+			i, ptr->m_size
+		);
+	} // end of used memory loop
+	
+	// free memory info
+	i = 0;
 	for (header_st *ptr = g_free; ptr != (void *) NULL; ptr = ptr->m_next, i++)
 	{
-		printf(	"\t%p [%lu] Free block %lu (Size %lu)\n",
+		printf("\t%p [%li]\tFree block %li (Size: %lu)\n",
 			(void *) ptr,
-			ptr - g_heap,
-			i,
-			ptr->m_size
+			(ptrdiff_t) ((char *) ptr - (char *) g_start),
+			i, ptr->m_size
 		);
-	}
-
-	// print all used blocks
-	i = 0;
-	for (header_st *ptr = g_heap->m_next; ptr != g_free; ptr = ptr->m_next)
-	{
-		printf(	"\t%p [%lu] Used block %lu (Size %lu)\n",
-			(void *) ptr,
-			ptr - g_heap,
-			i,
-			ptr->m_size
-		);
-	}
+	} // end of free memory loop
+	
+	printf("### END ###\n");
 }
 
 void *IR_malloc(size_t bytes_size)
 {
-	// init heap on first call to IR_malloc
-	if (g_heap_init == false)
+	if (g_active == false)
 		IR_init();
 
-	size_t chunk_size = sizeof(header_st) + bytes_size;
+	// calculate new block size
+	size_t block_size = sizeof(header_st) + bytes_size;
+	printf("Block size: %lu\n", block_size);
 
-	// save old free header
+	// assign current free block to variable
 	header_st *ptr = g_free;
 
-	// update free ptr and header
-	g_free += chunk_size;
-	g_free->m_size = ptr->m_size - chunk_size;
-	g_free->m_next = (void *) NULL;
+	// update free block address
+	g_free += block_size;
+	memcpy(g_free, ptr, sizeof(header_st));
+	g_free->m_size -= block_size;
 
-	// update ptr header
-	ptr->m_size = chunk_size;
+	// update new block
+	ptr->m_size = bytes_size;
 	ptr->m_next = g_free;
+
+	// update used block
+	g_used->m_next = ptr;
 
 	return ptr + sizeof(header_st);
 }

@@ -1,7 +1,6 @@
 #ifndef __IRON_RABBIT_GC_H__
 #define __IRON_RABBIT_GC_H__
 
-#include "unistd.h"
 #include "stddef.h"
 
 // flag for GC information being printed to terminal
